@@ -6,7 +6,7 @@ namespace JetBrains.Refasmer.Filters
 {
     public class CachedAttributeChecker
     {
-        private readonly Dictionary<string, HashSet<EntityHandle>> _attributeConstructors = new();
+        private readonly Dictionary<string, HashSet<EntityHandle>> _attributeConstructors = new Dictionary<string, HashSet<EntityHandle>>();
 
         public bool HasAttribute( MetadataReader reader, TypeDefinitionHandle typeHandle, string attributeFullName ) =>
             HasAttribute(reader, reader.GetTypeDefinition(typeHandle), attributeFullName);

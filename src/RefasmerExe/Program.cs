@@ -200,32 +200,33 @@ namespace JetBrains.Refasmer
 
         private static void WriteAssemblyToXml(string input, XmlTextWriter xmlWriter)
         {
-            using var _ = ReadAssembly(input, out var metaReader);
-            
-            if (!metaReader.IsAssembly)
-                return;
-            
-            var assembly = metaReader.GetAssemblyDefinition();
-            
-            xmlWriter.WriteStartElement("File");
-            xmlWriter.WriteAttributeString("AssemblyName", metaReader.GetString(assembly.Name));
-            xmlWriter.WriteAttributeString("Version", assembly.Version.ToString(4));
+            using (var _ = ReadAssembly(input, out var metaReader))
+            {
+                if (!metaReader.IsAssembly)
+                    return;
 
-            var culture = metaReader.GetString(assembly.Culture);
-            xmlWriter.WriteAttributeString("Culture", string.IsNullOrEmpty(culture) ? "neutral" : culture);
+                var assembly = metaReader.GetAssemblyDefinition();
+
+                xmlWriter.WriteStartElement("File");
+                xmlWriter.WriteAttributeString("AssemblyName", metaReader.GetString(assembly.Name));
+                xmlWriter.WriteAttributeString("Version", assembly.Version.ToString(4));
+
+                var culture = metaReader.GetString(assembly.Culture);
+                xmlWriter.WriteAttributeString("Culture", string.IsNullOrEmpty(culture) ? "neutral" : culture);
 
 
-            var publicKey = metaReader.GetBlobBytes(assembly.PublicKey);
-            var publicKeyToken = PublicKeyTokenCalculator.CalculatePublicKeyToken(publicKey); 
-            
-            var publicKeyTokenStr =  BitConverter.ToString(publicKeyToken).Replace("-", string.Empty).ToLowerInvariant();
-            
-            xmlWriter.WriteAttributeString("PublicKeyToken", publicKeyTokenStr);
+                var publicKey = metaReader.GetBlobBytes(assembly.PublicKey);
+                var publicKeyToken = PublicKeyTokenCalculator.CalculatePublicKeyToken(publicKey);
 
-            xmlWriter.WriteAttributeString("InGac", "false");
-            xmlWriter.WriteAttributeString("ProcessorArchitecture", "MSIL");
-                 
-            xmlWriter.WriteEndElement();
+                var publicKeyTokenStr = BitConverter.ToString(publicKeyToken).Replace("-", string.Empty).ToLowerInvariant();
+
+                xmlWriter.WriteAttributeString("PublicKeyToken", publicKeyTokenStr);
+
+                xmlWriter.WriteAttributeString("InGac", "false");
+                xmlWriter.WriteAttributeString("ProcessorArchitecture", "MSIL");
+
+                xmlWriter.WriteEndElement();
+            }
         }
 
         private static void MakeRefasm(string input)

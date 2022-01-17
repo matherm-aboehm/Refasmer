@@ -23,7 +23,7 @@ namespace JetBrains.Refasmer
 
     public class LoggerBase
     {
-        private readonly Stack<string> _loggerPrefixStack = new(new[] {""});
+        private readonly Stack<string> _loggerPrefixStack = new Stack<string>(new[] {""});
 
         private readonly ILogger _logger;
 
@@ -78,26 +78,26 @@ namespace JetBrains.Refasmer
         public Action<string> Trace => 
             _logger.IsEnabled(LogLevel.Trace) 
                 ? msg => _logger.Log(LogLevel.Trace, $"{_loggerPrefixStack.Peek()} {msg}")
-                : null;
+                : (Action<string>)null;
         public Action<string> Debug => 
             _logger.IsEnabled(LogLevel.Debug) 
                 ? msg => _logger.Log(LogLevel.Debug, $"{_loggerPrefixStack.Peek()} {msg}")
-                : null;
+                : (Action<string>)null;
         public Action<string> Info => 
             _logger.IsEnabled(LogLevel.Information) 
                 ? msg => _logger.Log(LogLevel.Information, $"{_loggerPrefixStack.Peek()} {msg}")
-                : null;
+                : (Action<string>)null;
         public Action<string> Warning => 
             _logger.IsEnabled(LogLevel.Warning) 
                 ? msg => _logger.Log(LogLevel.Warning, $"{_loggerPrefixStack.Peek()} {msg}")
-                : null;
+                : (Action<string>)null;
         public Action<string> Error => 
             _logger.IsEnabled(LogLevel.Error) 
                 ? msg => _logger.Log(LogLevel.Error, $"{_loggerPrefixStack.Peek()} {msg}")
-                : null;
+                : (Action<string>)null;
         public Action<string> Critical => 
             _logger.IsEnabled(LogLevel.Critical) 
                 ? msg => _logger.Log(LogLevel.Critical, $"{_loggerPrefixStack.Peek()} {msg}")
-                : null;
+                : (Action<string>)null;
     }
 }
