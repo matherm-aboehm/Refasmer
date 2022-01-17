@@ -31,12 +31,12 @@ namespace JetBrains.Refasmer
         {
             Debug?.Invoke("Adding ReferenceAssembly attribute");
 
-            var ctorHandle = FindMethod(AttributeNames.ReferenceAssembly, ".ctor", CheckRefAsmAttrCtorSignature);
+            var ctorHandle = FindMethod(AttributeNames.ReferenceAssembly, ".ctor", CheckRefAsmAttrCtorSignature, out var arReader);
 
             if (!IsNil(ctorHandle))
             {
-                Trace?.Invoke($"Found attribute constructor with void signature {_reader.ToString(ctorHandle)}");                
-                ctorHandle = Import(ctorHandle);
+                Trace?.Invoke($"Found attribute constructor with void signature {_reader.ToString(ctorHandle)}");
+                ctorHandle = arReader == _reader ? Import(ctorHandle) : ImportFromReferencedAssembly(ctorHandle, arReader);
             }
             else
             {

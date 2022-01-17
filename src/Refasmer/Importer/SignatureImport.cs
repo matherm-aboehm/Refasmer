@@ -10,21 +10,23 @@ namespace JetBrains.Refasmer
         {
             public readonly EntityHandle Handle;
 
-            public UnknownTypeInSignature( EntityHandle handle, string message )
+            public UnknownTypeInSignature(EntityHandle handle, string message)
                 : base(message)
             {
                 Handle = handle;
             }
         }
 
-        private BlobHandle ImportTypeSignature( BlobHandle srcHandle )
+        private BlobHandle ImportTypeSignature(BlobHandle srcHandle, MetadataReader reader = null)
         {
+            if (reader == null)
+                reader = _reader;
             try
             {
-                var blobReader = _reader.GetBlobReader(srcHandle);
+                var blobReader = reader.GetBlobReader(srcHandle);
                 var blobBuilder = new BlobBuilder(blobReader.Length);
 
-                ImportTypeSignature(ref blobReader, blobBuilder);
+                ImportTypeSignature(ref blobReader, blobBuilder, reader);
                 return _builder.GetOrAddBlob(blobBuilder);
             }
             catch (UnknownTypeInSignature e)
@@ -32,22 +34,24 @@ namespace JetBrains.Refasmer
                 if (e.Handle.Kind != HandleKind.TypeDefinition)
                     throw;
 
-                var typeDef = _reader.GetTypeDefinition((TypeDefinitionHandle) e.Handle);
+                var typeDef = reader.GetTypeDefinition((TypeDefinitionHandle)e.Handle);
 
-                if (Filter?.AllowImport(typeDef, _reader) == true)
+                if (Filter?.AllowImport(typeDef, reader) == true)
                     throw;
 
             }
             return default;
         }
 
-        private BlobHandle ImportSignatureWithHeader( BlobHandle srcHandle )
+        private BlobHandle ImportSignatureWithHeader(BlobHandle srcHandle, MetadataReader reader = null)
         {
+            if (reader == null)
+                reader = _reader;
             try
             {
-                var blobReader = _reader.GetBlobReader(srcHandle);
+                var blobReader = reader.GetBlobReader(srcHandle);
                 var blobBuilder = new BlobBuilder(blobReader.Length);
-                
+
                 var header = blobReader.ReadSignatureHeader();
                 blobBuilder.WriteByte(header.RawValue);
 
@@ -55,16 +59,16 @@ namespace JetBrains.Refasmer
                 {
                     case SignatureKind.Method:
                     case SignatureKind.Property:
-                        ImportMethodSignature(header, ref blobReader, blobBuilder);
+                        ImportMethodSignature(header, ref blobReader, blobBuilder, reader);
                         break;
                     case SignatureKind.Field:
-                        ImportFieldSignature(ref blobReader, blobBuilder);
+                        ImportFieldSignature(ref blobReader, blobBuilder, reader);
                         break;
                     case SignatureKind.LocalVariables:
-                        ImportLocalSignature(ref blobReader, blobBuilder);
+                        ImportLocalSignature(ref blobReader, blobBuilder, reader);
                         break;
                     case SignatureKind.MethodSpecification:
-                        ImportMethodSpecSignature(ref blobReader, blobBuilder);
+                        ImportMethodSpecSignature(ref blobReader, blobBuilder, reader);
                         break;
                     default:
                         throw new BadImageFormatException();
@@ -76,9 +80,9 @@ namespace JetBrains.Refasmer
                 if (e.Handle.Kind != HandleKind.TypeDefinition)
                     throw;
 
-                var typeDef = _reader.GetTypeDefinition((TypeDefinitionHandle) e.Handle);
+                var typeDef = reader.GetTypeDefinition((TypeDefinitionHandle)e.Handle);
 
-                if (Filter?.AllowImport(typeDef, _reader) == true)
+                if (Filter?.AllowImport(typeDef, reader) == true)
                     throw;
 
             }
@@ -86,7 +90,7 @@ namespace JetBrains.Refasmer
 
         }
 
-        private void ImportMethodSignature( SignatureHeader header, ref BlobReader blobReader, BlobBuilder blobBuilder )
+        private void ImportMethodSignature(SignatureHeader header, ref BlobReader blobReader, BlobBuilder blobBuilder, MetadataReader reader)
         {
             if (header.IsGeneric)
             {
@@ -98,32 +102,32 @@ namespace JetBrains.Refasmer
             blobBuilder.WriteCompressedInteger(parameterCount);
 
             // Return type
-            ImportTypeSignature(ref blobReader, blobBuilder);
+            ImportTypeSignature(ref blobReader, blobBuilder, reader);
 
             for (var parameterIndex = 0; parameterIndex < parameterCount; parameterIndex++)
-                ImportTypeSignature(ref blobReader, blobBuilder);
+                ImportTypeSignature(ref blobReader, blobBuilder, reader);
         }
 
-        private void ImportFieldSignature(ref BlobReader blobReader, BlobBuilder blobBuilder )
+        private void ImportFieldSignature(ref BlobReader blobReader, BlobBuilder blobBuilder, MetadataReader reader)
         {
-            ImportTypeSignature(ref blobReader, blobBuilder);
+            ImportTypeSignature(ref blobReader, blobBuilder, reader);
         }
 
-        private void ImportLocalSignature(ref BlobReader blobReader, BlobBuilder blobBuilder )
+        private void ImportLocalSignature(ref BlobReader blobReader, BlobBuilder blobBuilder, MetadataReader reader)
         {
-            ImportTypeSequenceSignature(ref blobReader, blobBuilder);
+            ImportTypeSequenceSignature(ref blobReader, blobBuilder, reader);
         }
 
-        private void ImportMethodSpecSignature(ref BlobReader blobReader, BlobBuilder blobBuilder )
+        private void ImportMethodSpecSignature(ref BlobReader blobReader, BlobBuilder blobBuilder, MetadataReader reader)
         {
-            ImportTypeSequenceSignature(ref blobReader, blobBuilder);
+            ImportTypeSequenceSignature(ref blobReader, blobBuilder, reader);
         }
 
-        private void ImportTypeSignature( ref BlobReader blobReader, BlobBuilder blobBuilder )
+        private void ImportTypeSignature(ref BlobReader blobReader, BlobBuilder blobBuilder, MetadataReader reader)
         {
             var typeCode = blobReader.ReadCompressedInteger();
             blobBuilder.WriteCompressedInteger(typeCode);
-            
+
             switch (typeCode)
             {
                 case (int)SignatureTypeCode.Boolean:
@@ -152,25 +156,25 @@ namespace JetBrains.Refasmer
                 case (int)SignatureTypeCode.ByReference:
                 case (int)SignatureTypeCode.Pinned:
                 case (int)SignatureTypeCode.SZArray:
-                    ImportTypeSignature(ref blobReader, blobBuilder);
+                    ImportTypeSignature(ref blobReader, blobBuilder, reader);
                     break;
 
                 case (int)SignatureTypeCode.FunctionPointer:
                     var header = blobReader.ReadSignatureHeader();
-                    ImportMethodSignature(header, ref blobReader, blobBuilder);
+                    ImportMethodSignature(header, ref blobReader, blobBuilder, reader);
                     break;
 
                 case (int)SignatureTypeCode.Array:
-                    ImportArrayTypeSignature(ref blobReader, blobBuilder);
+                    ImportArrayTypeSignature(ref blobReader, blobBuilder, reader);
                     break;
 
                 case (int)SignatureTypeCode.RequiredModifier:
                 case (int)SignatureTypeCode.OptionalModifier:
-                    ImportModifiedTypeSignature(ref blobReader, blobBuilder);
+                    ImportModifiedTypeSignature(ref blobReader, blobBuilder, reader);
                     break;
 
                 case (int)SignatureTypeCode.GenericTypeInstance:
-                    ImportGenericTypeInstanceSignature(ref blobReader, blobBuilder);
+                    ImportGenericTypeInstanceSignature(ref blobReader, blobBuilder, reader);
                     break;
 
                 case (int)SignatureTypeCode.GenericTypeParameter:
@@ -181,7 +185,7 @@ namespace JetBrains.Refasmer
 
                 case (int)SignatureTypeKind.Class:
                 case (int)SignatureTypeKind.ValueType:
-                    ImportTypeHandleSignature(ref blobReader, blobBuilder);
+                    ImportTypeHandleSignature(ref blobReader, blobBuilder, reader);
                     break;
 
                 default:
@@ -189,56 +193,56 @@ namespace JetBrains.Refasmer
             }
         }
 
-        private void ImportArrayTypeSignature( ref BlobReader blobReader, BlobBuilder blobBuilder )
+        private void ImportArrayTypeSignature(ref BlobReader blobReader, BlobBuilder blobBuilder, MetadataReader reader)
         {
             // Element type
-            ImportTypeSignature(ref blobReader, blobBuilder);
-            
+            ImportTypeSignature(ref blobReader, blobBuilder, reader);
+
             var rank = blobReader.ReadCompressedInteger();
             blobBuilder.WriteCompressedInteger(rank);
-            
+
             var sizesCount = blobReader.ReadCompressedInteger();
             blobBuilder.WriteCompressedInteger(sizesCount);
-            
+
             for (var i = 0; i < sizesCount; i++)
                 blobBuilder.WriteCompressedInteger(blobReader.ReadCompressedInteger());
 
             var lowerBoundsCount = blobReader.ReadCompressedInteger();
             blobBuilder.WriteCompressedInteger(lowerBoundsCount);
-            
+
             for (var i = 0; i < lowerBoundsCount; i++)
                 blobBuilder.WriteCompressedSignedInteger(blobReader.ReadCompressedSignedInteger());
         }
-        
-        private void ImportModifiedTypeSignature( ref BlobReader blobReader, BlobBuilder blobBuilder )
+
+        private void ImportModifiedTypeSignature(ref BlobReader blobReader, BlobBuilder blobBuilder, MetadataReader reader)
         {
-            ImportTypeHandleSignature(ref blobReader, blobBuilder);
-            ImportTypeSignature(ref blobReader, blobBuilder);
+            ImportTypeHandleSignature(ref blobReader, blobBuilder, reader);
+            ImportTypeSignature(ref blobReader, blobBuilder, reader);
         }
 
-        private void ImportTypeHandleSignature( ref BlobReader blobReader, BlobBuilder blobBuilder )
+        private void ImportTypeHandleSignature(ref BlobReader blobReader, BlobBuilder blobBuilder, MetadataReader reader)
         {
             var srcHandle = blobReader.ReadTypeHandle();
-            var dstHandle = Import(srcHandle);
+            var dstHandle = reader == _reader ? Import(srcHandle) : ImportFromReferencedAssembly(srcHandle, reader);
             if (dstHandle.IsNil)
-                throw new UnknownTypeInSignature(srcHandle, $"Unknown type in signature: {_reader.ToString(srcHandle)}"); 
-            
+                throw new UnknownTypeInSignature(srcHandle, $"Unknown type in signature: {reader.ToString(srcHandle)}");
+
             blobBuilder.WriteCompressedInteger(CodedIndex.TypeDefOrRefOrSpec(dstHandle));
         }
 
-        private void ImportGenericTypeInstanceSignature( ref BlobReader blobReader, BlobBuilder blobBuilder )
+        private void ImportGenericTypeInstanceSignature(ref BlobReader blobReader, BlobBuilder blobBuilder, MetadataReader reader)
         {
-            ImportTypeSignature(ref blobReader, blobBuilder);
-            ImportTypeSequenceSignature(ref blobReader, blobBuilder);
+            ImportTypeSignature(ref blobReader, blobBuilder, reader);
+            ImportTypeSequenceSignature(ref blobReader, blobBuilder, reader);
         }
 
-        private void ImportTypeSequenceSignature( ref BlobReader blobReader, BlobBuilder blobBuilder )
+        private void ImportTypeSequenceSignature(ref BlobReader blobReader, BlobBuilder blobBuilder, MetadataReader reader)
         {
             var count = blobReader.ReadCompressedInteger();
             blobBuilder.WriteCompressedInteger(count);
 
             for (var i = 0; i < count; i++)
-                ImportTypeSignature(ref blobReader, blobBuilder);
+                ImportTypeSignature(ref blobReader, blobBuilder, reader);
         }
     }
 }
