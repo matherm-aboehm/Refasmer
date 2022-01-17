@@ -24,5 +24,9 @@ namespace JetBrains.Refasmer
         private readonly Dictionary<PropertyDefinitionHandle, PropertyDefinitionHandle> _propertyDefinitionCache = new Dictionary<PropertyDefinitionHandle, PropertyDefinitionHandle>();
         private readonly Dictionary<EventDefinitionHandle, EventDefinitionHandle> _eventDefinitionCache = new Dictionary<EventDefinitionHandle, EventDefinitionHandle>();
         private readonly Dictionary<ParameterHandle, ParameterHandle> _parameterCache = new Dictionary<ParameterHandle, ParameterHandle>();
+        private readonly Dictionary<MetadataReader, Dictionary<TypeDefinitionHandle, TypeReferenceHandle>> _newTypeReferenceCache = new Dictionary<MetadataReader, Dictionary<TypeDefinitionHandle, TypeReferenceHandle>>();
+        private readonly Dictionary<MetadataReader, Dictionary<MethodDefinitionHandle, MemberReferenceHandle>> _newMemberReferenceCache = new Dictionary<MetadataReader, Dictionary<MethodDefinitionHandle, MemberReferenceHandle>>();
+        private readonly Dictionary<AssemblyReferenceHandle, MetadataReader> _asmRefReadersCache = new Dictionary<AssemblyReferenceHandle, MetadataReader>();
+        private readonly Dictionary<MetadataReader, AssemblyReferenceHandle> _readersAsmRefCache = new Dictionary<MetadataReader, AssemblyReferenceHandle>();
     }
 }

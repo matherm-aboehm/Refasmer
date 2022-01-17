@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection.Metadata;
@@ -9,7 +10,7 @@ using JetBrains.Refasmer.Filters;
 
 namespace JetBrains.Refasmer
 {
-    public partial class MetadataImporter : LoggerBase
+    public partial class MetadataImporter : LoggerBase, IDisposable
     {
         private readonly MetadataReader _reader;
         private readonly MetadataBuilder _builder;
@@ -56,53 +57,55 @@ namespace JetBrains.Refasmer
                 importer.Filter = new AllowPublic();
                 logger.Info?.Invoke("Using AllowPublic entity filter");
             }
-            
 
-            var mvidBlob = importer.Import();
-            
-            logger.Debug?.Invoke($"Building {(makeMock ? "mockup" : "reference")} assembly");
-            
-            var metaRootBuilder = new MetadataRootBuilder(metaBuilder, metaReader.MetadataVersion, true);
-            
-            var peHeaderBuilder = new PEHeaderBuilder(
-                Machine.I386, // override machine to force AnyCPU assembly 
-                peReader.PEHeaders.PEHeader.SectionAlignment,
-                peReader.PEHeaders.PEHeader.FileAlignment,
-                peReader.PEHeaders.PEHeader.ImageBase,
-                peReader.PEHeaders.PEHeader.MajorLinkerVersion,
-                peReader.PEHeaders.PEHeader.MinorLinkerVersion,
-                peReader.PEHeaders.PEHeader.MajorOperatingSystemVersion,
-                peReader.PEHeaders.PEHeader.MinorOperatingSystemVersion,
-                peReader.PEHeaders.PEHeader.MajorImageVersion,
-                peReader.PEHeaders.PEHeader.MinorImageVersion,
-                peReader.PEHeaders.PEHeader.MajorSubsystemVersion,
-                peReader.PEHeaders.PEHeader.MinorSubsystemVersion,
-                peReader.PEHeaders.PEHeader.Subsystem,
-                peReader.PEHeaders.PEHeader.DllCharacteristics,
-                peReader.PEHeaders.CoffHeader.Characteristics,
-                peReader.PEHeaders.PEHeader.SizeOfStackReserve,
-                peReader.PEHeaders.PEHeader.SizeOfStackCommit,
-                peReader.PEHeaders.PEHeader.SizeOfHeapReserve,
-                peReader.PEHeaders.PEHeader.SizeOfHeapCommit
-                );
+            using (importer)
+            {
+                var mvidBlob = importer.Import();
 
-            var peBuilder = new ManagedPEBuilder(peHeaderBuilder, metaRootBuilder, ilStream, 
-                deterministicIdProvider: blobs =>
-                {
-                    var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256) ?? throw new Exception("Cannot create hasher");
-                    
-                    foreach (var segment in blobs.Select(b => b.GetBytes()))
-                        hasher.AppendData(segment.Array, segment.Offset, segment.Count);
-                    
-                    return BlobContentId.FromHash(hasher.GetHashAndReset());
-                });
-            
-            var blobBuilder = new BlobBuilder();
-            var contentId = peBuilder.Serialize(blobBuilder);
-            
-            mvidBlob.CreateWriter().WriteGuid(contentId.Guid);
+                logger.Debug?.Invoke($"Building {(makeMock ? "mockup" : "reference")} assembly");
 
-            return blobBuilder.ToArray();
+                var metaRootBuilder = new MetadataRootBuilder(metaBuilder, metaReader.MetadataVersion, true);
+
+                var peHeaderBuilder = new PEHeaderBuilder(
+                    Machine.I386, // override machine to force AnyCPU assembly 
+                    peReader.PEHeaders.PEHeader.SectionAlignment,
+                    peReader.PEHeaders.PEHeader.FileAlignment,
+                    peReader.PEHeaders.PEHeader.ImageBase,
+                    peReader.PEHeaders.PEHeader.MajorLinkerVersion,
+                    peReader.PEHeaders.PEHeader.MinorLinkerVersion,
+                    peReader.PEHeaders.PEHeader.MajorOperatingSystemVersion,
+                    peReader.PEHeaders.PEHeader.MinorOperatingSystemVersion,
+                    peReader.PEHeaders.PEHeader.MajorImageVersion,
+                    peReader.PEHeaders.PEHeader.MinorImageVersion,
+                    peReader.PEHeaders.PEHeader.MajorSubsystemVersion,
+                    peReader.PEHeaders.PEHeader.MinorSubsystemVersion,
+                    peReader.PEHeaders.PEHeader.Subsystem,
+                    peReader.PEHeaders.PEHeader.DllCharacteristics,
+                    peReader.PEHeaders.CoffHeader.Characteristics,
+                    peReader.PEHeaders.PEHeader.SizeOfStackReserve,
+                    peReader.PEHeaders.PEHeader.SizeOfStackCommit,
+                    peReader.PEHeaders.PEHeader.SizeOfHeapReserve,
+                    peReader.PEHeaders.PEHeader.SizeOfHeapCommit
+                    );
+
+                var peBuilder = new ManagedPEBuilder(peHeaderBuilder, metaRootBuilder, ilStream,
+                    deterministicIdProvider: blobs =>
+                    {
+                        var hasher = IncrementalHash.CreateHash(HashAlgorithmName.SHA256) ?? throw new Exception("Cannot create hasher");
+
+                        foreach (var segment in blobs.Select(b => b.GetBytes()))
+                            hasher.AppendData(segment.Array, segment.Offset, segment.Count);
+
+                        return BlobContentId.FromHash(hasher.GetHashAndReset());
+                    });
+
+                var blobBuilder = new BlobBuilder();
+                var contentId = peBuilder.Serialize(blobBuilder);
+
+                mvidBlob.CreateWriter().WriteGuid(contentId.Guid);
+
+                return blobBuilder.ToArray();
+            }
         }
 
         public static void MakeRefasm( string inputPath, string outputPath, LoggerBase logger, IImportFilter filter = null, bool makeMock = false )
@@ -122,5 +125,45 @@ namespace JetBrains.Refasmer
 
             File.WriteAllBytes(outputPath, result);
         }
-     }
+
+        #region IDisposable Support
+        private bool disposedValue = false;
+        private readonly List<IDisposable> disposables = new List<IDisposable>();
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    foreach (var d in disposables)
+                    {
+                        d.Dispose();
+                    }
+                    disposables.Clear();
+                }
+
+                // TODO: nicht verwaltete Ressourcen (nicht verwaltete Objekte) freigeben und Finalizer weiter unten überschreiben.
+                // TODO: große Felder auf Null setzen.
+
+                disposedValue = true;
+            }
+        }
+
+        // TODO: Finalizer nur überschreiben, wenn Dispose(bool disposing) weiter oben Code für die Freigabe nicht verwalteter Ressourcen enthält.
+        // ~MetadataImporter() {
+        //   // Ändern Sie diesen Code nicht. Fügen Sie Bereinigungscode in Dispose(bool disposing) weiter oben ein.
+        //   Dispose(false);
+        // }
+
+        // Dieser Code wird hinzugefügt, um das Dispose-Muster richtig zu implementieren.
+        public void Dispose()
+        {
+            // Ändern Sie diesen Code nicht. Fügen Sie Bereinigungscode in Dispose(bool disposing) weiter oben ein.
+            Dispose(true);
+            // TODO: Auskommentierung der folgenden Zeile aufheben, wenn der Finalizer weiter oben überschrieben wird.
+            // GC.SuppressFinalize(this);
+        }
+        #endregion
+    }
 }
